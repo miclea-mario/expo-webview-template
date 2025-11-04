@@ -1,50 +1,137 @@
-# Welcome to your Expo app 👋
+# Expo WebView App Template 📱
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A production-ready React Native WebView template built with Expo. This template provides a complete mobile wrapper for web applications with support for downloads, blob handling, custom headers, and native back button behavior.
 
-## Get started
+## Features
 
-1. Install dependencies
+- ✅ **Full WebView Implementation** - Complete mobile wrapper for web apps
+- ✅ **Download Support** - Handle both regular files and blob downloads
+- ✅ **Native Integration** - Custom headers, platform detection, and back button handling
+- ✅ **File Sharing** - Share downloaded files with other apps
+- ✅ **Blob URL Support** - Cache and download blob-generated files
+- ✅ **Pull-to-Refresh** - Native pull-to-refresh functionality
+- ✅ **Loading Indicators** - Visual feedback during page loads
+- ✅ **Error Handling** - Comprehensive error handling and user feedback
 
-   ```bash
-   npm install
-   ```
+## Get Started
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+### 1. Install dependencies
 
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### 2. Configure your application
 
-## Learn more
+Edit `app/index.tsx` and update the `CONFIG` object:
 
-To learn more about developing your project with Expo, look at the following resources:
+```typescript
+const CONFIG = {
+  appVersion: "1.0.0",                    // App version number
+  appName: "YourApp",                     // Brand name (used in headers)
+  displayName: "YourApp Mobile App",      // Full display name (used in User-Agent)
+  baseUrl: "https://your-website.com",    // Your web application URL
+  appId: "com.yourcompany.yourapp",       // Bundle/package identifier
+  brandId: "yourapp",                     // Lowercase brand identifier
+  windowVars: {
+    isMobileApp: "isYourAppMobileApp",    // Window variable name for mobile detection
+    platform: "yourAppPlatform",          // Window variable name for platform
+    version: "yourAppVersion",            // Window variable name for version
+  },
+  readyEvent: "yourAppMobileReady",       // Custom event name dispatched when ready
+  cssPrefix: "yourapp",                   // CSS class prefix (e.g., 'yourapp-mobile-app')
+};
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+**Important:** These values are used throughout the app for:
 
-## Join the community
+- HTTP headers (`User-Agent`, `X-Mobile-App`)
+- JavaScript window variables injected into the WebView
+- sessionStorage keys
+- CSS classes added to `document.body`
+- Custom events dispatched to the web app
 
-Join our community of developers creating universal apps.
+### 3. Start the development server
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+npx expo start
+```
+
+Then press:
+
+- `a` - open on Android emulator
+- `i` - open on iOS simulator
+- Scan QR code with Expo Go app on your physical device
+
+## Project Structure
+
+```text
+app/
+  ├── index.tsx       # Main WebView component with all features
+  └── _layout.tsx     # Root layout (navigation wrapper)
+assets/
+  └── images/         # App icons and splash screens
+```
+
+## Key Features Explained
+
+### Download Handling
+
+The app automatically intercepts downloads for common file types (PDF, ZIP, images, etc.) and blob URLs. Files are downloaded using the native filesystem and can be shared with other apps.
+
+### Custom Headers
+
+The app sends custom headers with every request to help your web app detect it's running in a mobile context:
+
+```typescript
+{
+  "User-Agent": "Your App Name Mobile App/[platform]",
+  "X-Mobile-App": "Your App Name",
+  "X-Platform": "Android" | "iOS",
+  "X-App-Version": "1.0.0"
+}
+```
+
+### JavaScript Injection
+
+The template injects JavaScript that sets global variables in your web app:
+
+```javascript
+window.isWebViewApp = true;
+window.webViewAppPlatform = "android" | "ios";
+window.webViewAppVersion = "1.0.0";
+```
+
+Your web app can use these to detect it's running in the mobile wrapper.
+
+### Back Button Behavior
+
+On Android, the back button:
+
+1. Goes back in WebView history if possible
+2. Otherwise, shows "Press back again to exit" toast
+3. Exits app if pressed twice within 2 seconds
+
+## Building for Production
+
+### Android
+
+```bash
+npx expo build:android
+```
+
+### iOS
+
+```bash
+npx expo build:ios
+```
+
+## Learn More
+
+- [Expo Documentation](https://docs.expo.dev/)
+- [React Native WebView](https://github.com/react-native-webview/react-native-webview)
+- [Expo File System](https://docs.expo.dev/versions/latest/sdk/filesystem/)
+
+## License
+
+MIT
