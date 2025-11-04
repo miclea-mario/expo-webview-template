@@ -18,19 +18,19 @@ import { WebView } from "react-native-webview";
 import { WebViewNavigation } from "react-native-webview/lib/WebViewTypes";
 
 const CONFIG = {
-  appVersion: "1.0.0",
-  appName: "SuperScoala",
-  displayName: "SuperScoala Mobile App",
-  baseUrl: "https://superscoala.chesscoders.com",
-  appId: "com.superscoala.mobile",
-  brandId: "superscoala",
+  appVersion: "1.0.0", // App version number
+  appName: "YourApp", // Brand name (used in headers)
+  displayName: "YourApp Mobile App", // Full display name (used in User-Agent)
+  baseUrl: "https://your-website.com", // Your web application URL
+  appId: "com.yourcompany.yourapp", // Bundle/package identifier
+  brandId: "yourapp", // Lowercase brand identifier
   windowVars: {
-    isMobileApp: "isSuperScoalaMobileApp",
-    platform: "superScoalaPlatform",
-    version: "superScoalaAppVersion",
+    isMobileApp: "isYourAppMobileApp", // Window variable name for mobile detection
+    platform: "yourAppPlatform", // Window variable name for platform
+    version: "yourAppVersion", // Window variable name for version
   },
-  readyEvent: "superScoalaMobileReady",
-  cssPrefix: "superscoala",
+  readyEvent: "yourAppMobileReady", // Custom event name dispatched when ready
+  cssPrefix: "yourapp", // CSS class prefix (e.g., 'yourapp-mobile-app')
 };
 
 export default function Index() {
