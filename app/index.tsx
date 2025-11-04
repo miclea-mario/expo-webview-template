@@ -76,6 +76,19 @@ export default function Index() {
         window.lastGeneratedBlobUrl = null;
         window.blobDataCache = new Map();
 
+        // Optimize scroll performance
+        const style = document.createElement('style');
+        style.textContent = \`
+          * {
+            -webkit-overflow-scrolling: touch !important;
+          }
+          body {
+            -webkit-overflow-scrolling: touch !important;
+            overscroll-behavior-y: none !important;
+          }
+        \`;
+        document.head.appendChild(style);
+
         // Override URL.createObjectURL to cache blob data
         const originalCreateObjectURL = URL.createObjectURL;
         URL.createObjectURL = function(blob) {
@@ -573,6 +586,14 @@ export default function Index() {
           domStorageEnabled={true}
           originWhitelist={["*"]}
           pullToRefreshEnabled={true}
+          {...(Platform.OS === "android" && {
+            overScrollMode: "never",
+            nestedScrollEnabled: true,
+          })}
+          {...(Platform.OS === "ios" && {
+            decelerationRate: "normal",
+            bounces: true,
+          })}
         />
         {isLoading && (
           <ActivityIndicator
