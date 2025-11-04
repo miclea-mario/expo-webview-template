@@ -179,11 +179,11 @@ export default function Index() {
     })();
   `;
 
-  const showToast = (message: string) => {
+  const showToast = (message: string, title?: string) => {
     if (Platform.OS === "android") {
       ToastAndroid.show(message, ToastAndroid.SHORT);
     } else {
-      Alert.alert(message);
+      Alert.alert(title || "Notification", message, [{ text: "OK" }]);
     }
   };
 
@@ -198,7 +198,7 @@ export default function Index() {
           await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
 
         if (!permissions.granted) {
-          showToast("Storage permission denied");
+          showToast("Storage permission denied", "Permission Required");
           return;
         }
         let finalFileName = fileName;
@@ -261,11 +261,11 @@ export default function Index() {
           encoding: FileSystem.EncodingType.Base64,
         });
 
-        showToast("File saved successfully");
+        showToast("File saved successfully", "Success");
       } else {
         const isAvailable = await Sharing.isAvailableAsync();
         if (!isAvailable) {
-          showToast("Sharing is not available on this device.");
+          showToast("Sharing is not available on this device.", "Error");
           return;
         }
 
@@ -288,9 +288,16 @@ export default function Index() {
         }
 
         await Sharing.shareAsync(fileUri, shareOptions);
+        showToast("File has been shared successfully", "Success");
       }
     } catch (error) {
-      showToast("Could not save file: " + (error as Error).message);
+      const errorMessage = (error as Error).message;
+      if (
+        !errorMessage.includes("dismissedAction") &&
+        !errorMessage.includes("cancelled")
+      ) {
+        showToast("Could not save file: " + errorMessage, "Error");
+      }
     }
   };
 
@@ -330,7 +337,7 @@ export default function Index() {
     }
 
     const fileUri = `${FileSystem.documentDirectory}${fileName}`;
-    showToast("Starting download...");
+    showToast("Starting download...", "Download");
 
     try {
       const downloadResult = await FileSystem.downloadAsync(url, fileUri, {
@@ -346,7 +353,7 @@ export default function Index() {
           mimeType = getMimeTypeFromExtension(fileName);
         }
 
-        showToast("Download complete");
+        showToast("Download complete", "Success");
         await saveFile(downloadResult.uri, fileName, mimeType);
       } else {
         throw new Error(
@@ -354,7 +361,7 @@ export default function Index() {
         );
       }
     } catch (error) {
-      showToast("Download failed: " + (error as Error).message);
+      showToast("Download failed: " + (error as Error).message, "Error");
     }
   };
 
@@ -390,7 +397,7 @@ export default function Index() {
       `;
       webViewRef.current.injectJavaScript(script);
     } catch {
-      showToast("Blob download failed.");
+      showToast("Blob download failed.", "Error");
     }
   };
 
@@ -442,7 +449,7 @@ export default function Index() {
         await saveFile(fileUri, fileName, mimeType);
       }
     } catch (error) {
-      showToast("Download failed: " + (error as Error).message);
+      showToast("Download failed: " + (error as Error).message, "Error");
     }
   };
 
@@ -487,6 +494,14 @@ export default function Index() {
     if (DOWNLOAD_EXTENSIONS.some((ext) => path.endsWith(ext))) {
       downloadFile(url);
       return false;
+    }
+
+    if (
+      url.startsWith("about:") ||
+      url.startsWith("data:") ||
+      url.startsWith("blob:")
+    ) {
+      return true;
     }
 
     if (!url.startsWith("http:") && !url.startsWith("https:")) {
@@ -550,7 +565,7 @@ export default function Index() {
           onError={(syntheticEvent) => {
             setIsLoading(false);
             const { nativeEvent } = syntheticEvent;
-            showToast(`Error: ${nativeEvent.description}`);
+            showToast(`Error: ${nativeEvent.description}`, "WebView Error");
           }}
           onNavigationStateChange={(navState) => {
             setCanGoBack(navState.canGoBack);
@@ -586,6 +601,7 @@ export default function Index() {
           domStorageEnabled={true}
           originWhitelist={["*"]}
           pullToRefreshEnabled={true}
+          allowsBackForwardNavigationGestures={true}
           {...(Platform.OS === "android" && {
             overScrollMode: "never",
             nestedScrollEnabled: true,
