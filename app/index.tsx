@@ -568,6 +568,7 @@ export default function Index() {
           })}
           mediaPlaybackRequiresUserAction={false}
           allowsInlineMediaPlayback={true}
+          allowsFullscreenVideo={true}
           javaScriptEnabled={true}
           domStorageEnabled={true}
           originWhitelist={["*"]}
