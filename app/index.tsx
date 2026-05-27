@@ -1,7 +1,9 @@
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import * as FileSystem from "expo-file-system/legacy";
 import { EncodingType } from "expo-file-system/legacy";
+import * as Notifications from "expo-notifications";
 import * as Sharing from "expo-sharing";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -16,6 +18,15 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import { WebViewNavigation } from "react-native-webview/lib/WebViewTypes";
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 const CONFIG = {
   appVersion: "1.0.0", // App version number
@@ -34,17 +45,26 @@ const CONFIG = {
 };
 
 export default function Index() {
+  const [pendingUrl, setPendingUrl] = useState<string | null>(null);
   const webViewRef = useRef<WebView>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [canGoBack, setCanGoBack] = useState(false);
   const lastBackPressed = useRef<number | null>(null);
   const lastUrl = useRef<string>("");
 
-  const buildUrlWithMobileHeaders = (): string => {
-    const uri = new URL(CONFIG.baseUrl);
-    uri.searchParams.append("mobile", "true");
-    uri.searchParams.append("platform", Platform.OS);
-    return uri.toString();
+  const { registerForPushNotificationsAsync } = usePushNotifications({
+    webViewRef,
+    baseUrl: CONFIG.baseUrl,
+    setPendingUrl,
+  });
+
+  const buildUrlWithMobileHeaders = (path = ""): string => {
+    const url = new URL(path, CONFIG.baseUrl);
+
+    url.searchParams.set("mobile", "true");
+    url.searchParams.set("platform", Platform.OS);
+
+    return url.toString();
   };
 
   const getMobileHeaders = (): { [key: string]: string } => {
@@ -52,7 +72,7 @@ export default function Index() {
     return {
       "User-Agent": `${CONFIG.displayName}/${platformName} ${CONFIG.appName}/${CONFIG.appVersion} (React Native WebView)`,
       "X-Mobile-App": CONFIG.appName,
-      "X-Platform": Platform.OS === "android" ? "android" : "ios",
+      "X-Platform": Platform.OS,
       "X-App-Version": CONFIG.appVersion,
     };
   };
@@ -147,24 +167,38 @@ export default function Index() {
           document.body.classList.add('${CONFIG.cssPrefix}-' + window.${CONFIG.windowVars.platform});
         }
 
-        // Intercept download link clicks
+        // Intercept link clicks smoothly
         document.addEventListener('click', function(e) {
-          let target = e.target;
-          while (target && target.tagName !== 'A') {
-            target = target.parentElement;
+          const anchor = e.target.closest('a');
+          if (!anchor) return;
+
+          const href = anchor.href || anchor.getAttribute('href');
+          if (!href) return;
+
+          if (anchor.hasAttribute('download')) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'DOWNLOAD',
+              url: href,
+              filename: anchor.getAttribute('download') || '',
+              isBlob: href.startsWith('blob:')
+            }));
+            return;
           }
-          if (target && target.tagName === 'A' && target.hasAttribute('download')) {
-            const href = target.href || target.getAttribute('href');
-            if (href) {
-              e.preventDefault();
-              e.stopPropagation();
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'download',
-                url: href,
-                filename: target.getAttribute('download') || '',
-                isBlob: href.startsWith('blob:')
-              }));
-            }
+
+          const isBlank = anchor.target === '_blank';
+          const isExternal = !href.startsWith(window.location.origin);
+
+          if (isBlank || isExternal) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'OPEN_EXTERNAL_URL',
+              url: href
+            }));
           }
         }, true);
       }
@@ -190,7 +224,7 @@ export default function Index() {
   const saveFile = async (
     fileUri: string,
     fileName: string,
-    mimeType?: string
+    mimeType?: string,
   ) => {
     try {
       if (Platform.OS === "android") {
@@ -228,7 +262,7 @@ export default function Index() {
         try {
           const existingFileUris =
             await FileSystem.StorageAccessFramework.readDirectoryAsync(
-              permissions.directoryUri
+              permissions.directoryUri,
             );
           existingFileNames = existingFileUris.map((uri) => {
             const decoded = decodeURIComponent(uri);
@@ -250,7 +284,7 @@ export default function Index() {
           await FileSystem.StorageAccessFramework.createFileAsync(
             permissions.directoryUri,
             attemptFileName,
-            mimeType || "application/octet-stream"
+            mimeType || "application/octet-stream",
           );
 
         const content = await FileSystem.readAsStringAsync(fileUri, {
@@ -260,8 +294,6 @@ export default function Index() {
         await FileSystem.writeAsStringAsync(newFileUri, content, {
           encoding: FileSystem.EncodingType.Base64,
         });
-
-        showToast("File saved successfully", "Success");
       } else {
         const isAvailable = await Sharing.isAvailableAsync();
         if (!isAvailable) {
@@ -288,7 +320,6 @@ export default function Index() {
         }
 
         await Sharing.shareAsync(fileUri, shareOptions);
-        showToast("File has been shared successfully", "Success");
       }
     } catch (error) {
       const errorMessage = (error as Error).message;
@@ -337,7 +368,6 @@ export default function Index() {
     }
 
     const fileUri = `${FileSystem.documentDirectory}${fileName}`;
-    showToast("Starting download...", "Download");
 
     try {
       const downloadResult = await FileSystem.downloadAsync(url, fileUri, {
@@ -353,11 +383,10 @@ export default function Index() {
           mimeType = getMimeTypeFromExtension(fileName);
         }
 
-        showToast("Download complete", "Success");
         await saveFile(downloadResult.uri, fileName, mimeType);
       } else {
         throw new Error(
-          `Download failed: Status code ${downloadResult.status}`
+          `Download failed: Status code ${downloadResult.status}`,
         );
       }
     } catch (error) {
@@ -368,7 +397,7 @@ export default function Index() {
   const handleBlobDownload = async (
     url: string,
     retryCount = 0,
-    suggestedFilename?: string
+    suggestedFilename?: string,
   ) => {
     if (!webViewRef.current) return;
 
@@ -378,14 +407,14 @@ export default function Index() {
           const blobData = window.blobDataCache.get('${url}');
           if (blobData) {
             window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'blobDownload',
+              type: 'BLOB_DOWNLOAD',
               data: blobData,
               url: '${url}',
               suggestedFilename: '${suggestedFilename || ""}'
             }));
           } else {
             window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'blobDownload',
+              type: 'BLOB_DOWNLOAD',
               error: 'Blob data not found in cache',
               url: '${url}',
               retry: ${retryCount},
@@ -405,7 +434,32 @@ export default function Index() {
     try {
       const message = JSON.parse(event.nativeEvent.data);
 
-      if (message.type === "download") {
+      if (message.type === "REQUEST_PUSH_TOKEN") {
+        const token = await registerForPushNotificationsAsync();
+
+        if (
+          token &&
+          token.startsWith("ExponentPushToken") &&
+          webViewRef.current
+        ) {
+          webViewRef.current.injectJavaScript(`
+            window.dispatchEvent(new CustomEvent('PUSH_TOKEN_RESPONSE', { detail: '${token}' }));
+            true;
+          `);
+        }
+        return;
+      }
+
+      if (message.type === "OPEN_EXTERNAL_URL") {
+        if (message.url) {
+          Linking.openURL(message.url).catch((err) =>
+            console.error("Failed to open external URL:", err),
+          );
+        }
+        return;
+      }
+
+      if (message.type === "DOWNLOAD") {
         if (message.isBlob) {
           handleBlobDownload(message.url, 0, message.filename);
         } else {
@@ -414,17 +468,20 @@ export default function Index() {
         return;
       }
 
-      if (message.type === "blobDownload") {
+      if (message.type === "BLOB_DOWNLOAD") {
         if (message.error) {
           const retryCount = message.retry || 0;
           if (retryCount < 5) {
-            setTimeout(() => {
-              handleBlobDownload(
-                message.url,
-                retryCount + 1,
-                message.suggestedFilename
-              );
-            }, 100 * (retryCount + 1));
+            setTimeout(
+              () => {
+                handleBlobDownload(
+                  message.url,
+                  retryCount + 1,
+                  message.suggestedFilename,
+                );
+              },
+              100 * (retryCount + 1),
+            );
             return;
           }
           throw new Error(message.error);
@@ -454,7 +511,7 @@ export default function Index() {
   };
 
   const onShouldStartLoadWithRequest = (
-    request: WebViewNavigation
+    request: WebViewNavigation,
   ): boolean => {
     const { url } = request;
 
@@ -506,7 +563,7 @@ export default function Index() {
 
     if (!url.startsWith("http:") && !url.startsWith("https:")) {
       Linking.openURL(url).catch((err) =>
-        console.error("Failed to open external URL:", err)
+        console.error("Failed to open external URL:", err),
       );
       return false;
     }
@@ -535,14 +592,14 @@ export default function Index() {
     if (Platform.OS === "android") {
       const subscription = BackHandler.addEventListener(
         "hardwareBackPress",
-        onAndroidBackPress
+        onAndroidBackPress,
       );
       return () => subscription.remove();
     }
   }, [onAndroidBackPress]);
 
   const webViewSource = {
-    uri: buildUrlWithMobileHeaders(),
+    uri: buildUrlWithMobileHeaders(pendingUrl || undefined),
     headers: getMobileHeaders(),
   };
 
@@ -558,7 +615,12 @@ export default function Index() {
           source={webViewSource}
           style={styles.flexContainer}
           onLoadStart={() => setIsLoading(true)}
-          onLoadEnd={() => setIsLoading(false)}
+          onLoadEnd={() => {
+            setIsLoading(false);
+            if (pendingUrl) {
+              setPendingUrl(null);
+            }
+          }}
           onLoadProgress={({ nativeEvent }) =>
             setIsLoading(nativeEvent.progress < 1)
           }
